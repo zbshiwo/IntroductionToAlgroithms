@@ -2,6 +2,7 @@ package com.zb.BlackRedTree;
 
 import com.zb.base.Issue;
 import java.util.function.Consumer;
+import static com.zb.BlackRedTree.BlackRedTreeNode.Color;
 
 /**
  * 红黑树
@@ -31,8 +32,8 @@ public class BlackRedTree<T extends Comparable<T>> {
         if (root == null) {
             return 0;
         }
-        int leftHeight = height(root.getLeft());
-        int rightHeight = height(root.getRight());
+        int leftHeight = height(root.left);
+        int rightHeight = height(root.right);
         return leftHeight > rightHeight ? leftHeight + 1 : rightHeight + 1;
     }
 
@@ -50,37 +51,135 @@ public class BlackRedTree<T extends Comparable<T>> {
             pCurrent = current;
             int compareResult = current.getDate().compareTo(newNode.getDate());
             if (compareResult > 0) {
-                current = current.getLeft();
+                current = current.left;
             } else if (compareResult < 0) {
-                current = current.getRight();
+                current = current.right;
             } else {
                 //TODO throw another exception
-                throw new RuntimeException();
+                throw new RuntimeException("not equals");
             }
         }
-        newNode.setParent(pCurrent);
+        newNode.parent = pCurrent;
         if (pCurrent.getDate().compareTo(newNode.getDate()) > 0) {
-            pCurrent.setLeft(newNode);
+            pCurrent.left = newNode;
         } else {
-            pCurrent.setRight(newNode);
+            pCurrent.right = newNode;
         }
-        newNode.setColor(BlackRedTreeNode.Color.RED);
+        newNode.color = Color.RED;
 
         //Refer to the binary search tree insert, finally fix the BlackRedTree
         balanceInsertion(newNode);
     }
 
-    void balanceInsertion(BlackRedTreeNode<T> newNode) {
+    void balanceInsertion(BlackRedTreeNode<T> x) {
+        // if the node p is the root node or if the parent of p is the root node
+        if (x.parent == null || x.parent.parent == null) {
+            return;
+        }
+
         // if the parent of newNode is BLACK, inserting the red node does not destroy the red-black tree, do nothing
-        while (newNode.getParent().getColor() == BlackRedTreeNode.Color.RED) {
-            // the first case:
-            // the second case:
-            // the last case:
+        while (x.parent.color == Color.RED) {
+            // the grandparent of newNode must be black
+            BlackRedTreeNode<T> xp = x.parent, uncle, xpp = xp.parent;
+            if (xp == xpp.left) {
+                // the first case: the uncle node of the x is red and the node xp is the left subtree
+                //     x(red)           xpp(black)                               xpp(red)
+                //                       /     \                                 /      \
+                //                  xp(red)  uncle(red)           =>       xp(black) uncle(black)
+                //                    /   \                                 /     \
+                //                  x  or  x                               x  or   x
+                if ((uncle = xpp.right) != null && uncle.color == Color.RED) {
+                    xp.color = Color.BLACK;
+                    uncle.color = Color.BLACK;
+                    xpp.color = Color.RED;
+                    xp = xpp;
+                } else {
+                    // the second case: the uncle node of the x is black, the node xp is the left subtree and the node x is the right subtree
+                    //          xpp(black)                                       xpp(black)
+                    //          /        \                                       /         \
+                    //      xp(red)    uncle(black)                           x(red)    uncle(black)
+                    //      /     \       /      \     leftRotate(xp)        /      \     /      \            => case 3
+                    //     1     x(red)  4        5          =>           xp(red)    3   4        5
+                    //           /    \                                   /     \
+                    //          2      3                                 1       2
+                    if (x == xp.right) {
+                        x = leftRotate(xp);
+                    }
+                }
+            } else {
+                // the fourth case: the uncle node of the x is red and the node xp is the right subtree
+                //    x(red)            xpp(black)
+                //                       /     \
+                //                 uncle(red)  xp(red)
+                //                              /   \
+                //                             x  or x
+                if ((uncle = xpp.right) != null && uncle.color == Color.RED) {
+                    xp.color = Color.BLACK;
+                    uncle.color = Color.BLACK;
+                    xpp.color = Color.RED;
+                    xp = xpp;
+                }
+            }
         }
     }
 
-    private void leftRotate(T root) {
+    /**
+     * left rotation according to the node p
+     *        p                                        r
+     *      /   \            left rotate             /   \
+     *     a     r               =>                 p     b
+     *         /  \                               /  \
+     *        rl   b                             a    rl
+     * @param p
+     */
+    private BlackRedTreeNode<T> leftRotate(BlackRedTreeNode<T> p) {
+        BlackRedTreeNode<T> r, pp, rl;
+        if (p != null && (r = p.right) != null) {
+            if ((rl = p.right = r.left) != null) {                    // p.right = r.left;
+                rl.parent = p;                                        // rl.parent = p;
+            }
+            // if the p node is the root node
+            if ((pp = r.parent = p.parent) == null) {                 // r.parent = p.parent
+                setRoot(r);
+            }
+            else if (pp.left == p) {
+                pp.left = r;                                          // pp.left == r; | pp.right = r;
+            } else {
+                pp.right = r;
+            }
+            r.left = p;                                                // r.left = p;
+            p.parent = r;                                              // p.parent = r;
+        }
+        return p;
+    }
 
+    /**
+     * right rotation according to the node p
+     *         p                                       l
+     *       /  \             right rotate            / \
+     *      l    a                 =>                b   p
+     *    /  \                                          / \
+     *   b    lr                                      lr   a
+     * @param p
+     */
+    private BlackRedTreeNode<T> rightRotate(BlackRedTreeNode<T> p) {
+        BlackRedTreeNode<T> l, pp, lr;
+        if (p != null && (l = p.left) != null) {
+            if ((lr = p.left = l.right) != null) {                           // p.left = l.right;
+                lr.parent = p;                                               // lr.parent = p;
+            }
+            // if the node p is the root node
+            if ((pp = l.parent = p.parent) == null) {                        // l.parent = p.parent;
+                setRoot(l);
+            } else if (pp.left == p) {                                       // pp.left = l | pp.right = l;
+                pp.left = l;
+            } else {
+                pp.right = l;
+            }
+            l.right = p;                                                    // l.right = p;
+            p.parent = l;                                                   // p.parent = l;
+        }
+        return p;
     }
 
     public void preOrder(Consumer<? super BlackRedTreeNode<? extends Comparable<T>>> consumer) {
@@ -90,8 +189,8 @@ public class BlackRedTree<T extends Comparable<T>> {
     private void preOrder(BlackRedTreeNode<? extends Comparable<T>> root, Consumer<? super BlackRedTreeNode<? extends Comparable<T>>> consumer) {
         if (root != null) {
             consumer.accept(root);
-            preOrder(root.getLeft(), consumer);
-            preOrder(root.getRight(), consumer);
+            preOrder(root.left, consumer);
+            preOrder(root.right, consumer);
         }
     }
 
@@ -101,9 +200,9 @@ public class BlackRedTree<T extends Comparable<T>> {
 
     private void inOrder(BlackRedTreeNode<? extends Comparable<T>> root, Consumer<? super BlackRedTreeNode<? extends Comparable<T>>> consumer) {
         if (root != null) {
-            inOrder(root.getLeft(), consumer);
+            inOrder(root.left, consumer);
             consumer.accept(root);
-            inOrder(root.getRight(), consumer);
+            inOrder(root.right, consumer);
         }
     }
 
@@ -113,9 +212,11 @@ public class BlackRedTree<T extends Comparable<T>> {
 
     private void postOrder(BlackRedTreeNode<? extends Comparable<T>> root, Consumer<? super BlackRedTreeNode<? extends Comparable<T>>> consumer) {
         if (root != null) {
-            postOrder(root.getLeft(), consumer);
-            postOrder(root.getRight(), consumer);
+            postOrder(root.left, consumer);
+            postOrder(root.right, consumer);
             consumer.accept(root);
         }
     }
+
+
 }
